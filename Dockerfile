@@ -3,11 +3,8 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
-# stamp-mcp is a public sibling repo -- install it from git, then
-# entropy-mcp with the http extra (aiohttp).
-RUN pip install --no-cache-dir \
-    "git+https://github.com/theoddden/Stamp-MCP.git" \
-    ".[http]"
+# stamp-mcp is on PyPI -- pip resolves it as a normal dependency.
+RUN pip install --no-cache-dir ".[http]"
 
 # 0.0.0.0 inside the container; compose exposes it only to the
 # terradev-web Caddy network, never to the host's public interface.
