@@ -33,6 +33,38 @@ jobs:
       #   - the terradev-web Caddy container on the
       #     terradev-cloud_terradev network (TLS termination)
       #   - DNS A record: entropy-mcp.terradev.cloud -> instance IP
+      # Fail fast with a readable message when secrets are missing or
+      # malformed -- otherwise the failure surfaces later as a cryptic
+      # "Could not connect to the endpoint URL" from the AWS CLI.
+      - name: Preflight secrets check
+        env:
+          INSTANCE_ID: ${{ secrets.AWS_INSTANCE_ID }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, re, sys
+          problems = []
+          region = os.environ.get("AWS_DEFAULT_REGION", "")
+          if not re.fullmatch(r"[a-z]{2}-[a-z]+-\d", region):
+              problems.append(
+                  f"AWS_REGION is {region!r} -- must look like "
+                  "'us-east-1' (lowercase, no spaces)")
+          if not os.environ.get("AWS_ACCESS_KEY_ID"):
+              problems.append("AWS_ACCESS_KEY_ID is empty")
+          if not os.environ.get("AWS_SECRET_ACCESS_KEY"):
+              problems.append("AWS_SECRET_ACCESS_KEY is empty")
+          iid = os.environ.get("INSTANCE_ID", "")
+          if not re.fullmatch(r"i-[0-9a-f]{8,17}", iid):
+              problems.append(
+                  f"AWS_INSTANCE_ID is {iid!r} -- must look like "
+                  "'i-0123456789abcdef0'")
+          if problems:
+              print("Secret problems found:")
+              for p in problems:
+                  print(" -", p)
+              sys.exit(1)
+          print(f"Secrets OK -- region {region}, instance {iid}")
+          PYEOF
+
       - name: Deploy via SSM Run Command
         env:
           INSTANCE_ID: ${{ secrets.AWS_INSTANCE_ID }}
