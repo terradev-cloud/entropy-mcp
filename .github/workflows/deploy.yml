@@ -1,0 +1,81 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # Deploy via SSM Run Command -- no SSH, no inbound connectivity
+      # needed; the SSM agent on the instance dials out. Works even when
+      # the instance sits behind CGNAT / a tailnet.
+      #
+      # Secrets (repo Settings -> Secrets -> Actions):
+      #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY -- IAM creds allowed
+      #     to ssm:SendCommand + ssm:GetCommandInvocation on the instance
+      #   AWS_REGION        -- e.g. us-east-1
+      #   AWS_INSTANCE_ID   -- e.g. i-0123456789abcdef0
+      #
+      # Instance prerequisites:
+      #   - IAM instance profile with AmazonSSMManagedInstanceCore
+      #   - SSM agent running (preinstalled on Amazon Linux)
+      #   - docker + compose plugin, git
+      #   - the terradev-web Caddy container on the
+      #     terradev-cloud_terradev network (TLS termination)
+      #   - DNS A record: entropy-mcp.terradev.cloud -> instance IP
+      - name: Deploy via SSM Run Command
+        env:
+          INSTANCE_ID: ${{ secrets.AWS_INSTANCE_ID }}
+        run: |
+          # Build the remote command list as JSON so quoting stays sane.
+          python3 - > /tmp/ssm_params.json <<'PYEOF'
+          import json
+          commands = [
+              "set -euo pipefail",
+              "mkdir -p /opt/entropy-mcp",
+              "if [ ! -d /opt/entropy-mcp/.git ]; then git clone https://github.com/theoddden/entropy-mcp.git /opt/entropy-mcp; fi",
+              "cd /opt/entropy-mcp && git fetch origin && git reset --hard origin/main",
+              "docker compose version >/dev/null 2>&1 || (mkdir -p /usr/local/lib/docker/cli-plugins && curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m) -o /usr/local/lib/docker/cli-plugins/docker-compose && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose)",
+              "docker buildx version 2>/dev/null | grep -qE 'buildx (0\\.(1[7-9]|[2-9][0-9])|[1-9][0-9]*)\\.[0-9]+' || (mkdir -p /usr/local/lib/docker/cli-plugins && ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && curl -SL https://github.com/docker/buildx/releases/download/v0.19.3/buildx-v0.19.3.linux-${ARCH} -o /usr/local/lib/docker/cli-plugins/docker-buildx && chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx)",
+              "cd /opt/entropy-mcp && docker compose up -d --build",
+              "cd /opt/entropy-mcp && docker compose ps",
+              # Idempotently add the Caddy site block to the shared
+              # terradev-web Caddyfile, then reload. The block is a
+              # no-op if already present.
+              "grep -q 'entropy-mcp.terradev.cloud' /opt/terradev-cloud/web/Caddyfile || cat /opt/entropy-mcp/deploy/Caddyfile >> /opt/terradev-cloud/web/Caddyfile",
+              "docker exec terradev-web caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || docker exec $(docker ps --filter network=terradev-cloud_terradev --format '{{.Names}}' | grep -i caddy | head -1) caddy reload --config /etc/caddy/Caddyfile 2>/dev/null || echo 'Caddy reload skipped -- reload manually'",
+              "curl -s --max-time 5 http://127.0.0.1:8001/health || echo 'health check not reachable yet'",
+          ]
+          print(json.dumps({"commands": commands}))
+          PYEOF
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --timeout-seconds 600 \
+            --parameters file:///tmp/ssm_params.json \
+            --query 'Command.CommandId' --output text)
+          echo "SSM command id: $COMMAND_ID"
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" || true
+
+          RESULT=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query '{Status: Status, Stdout: StandardOutputContent, Stderr: StandardErrorContent}')
+          echo "$RESULT"
+
+          # Fail the step if the remote command failed -- otherwise a
+          # broken deploy looks green.
+          STATUS=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['Status'])")
+          [ "$STATUS" = "Success" ] || exit 1

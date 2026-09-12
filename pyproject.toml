@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "entropy-mcp"
+version = "0.1.0"
+description = "Entropy -- cryptographically sound randomness for agents, with verifiable commit-reveal. CSPRNG draws, seeded determinism, named distributions, constrained sampling, entropy tests, bandit strategies. Stdio core is zero-dependency; HTTP transport via aiohttp."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "theoddden" }]
+keywords = ["mcp", "model-context-protocol", "randomness", "csprng", "commit-reveal", "entropy"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    # stamp-mcp provides time, attestation, canonicalization, and UUIDs.
+    # The import is lazy: tier 0/2 commands work without it; commit/reveal/
+    # draw with attestation require it (or a reachable remote endpoint).
+    "stamp-mcp>=0.5.0",
+]
+
+[project.optional-dependencies]
+http = ["aiohttp>=3.8.0"]
+dev = ["pytest>=7.0", "pytest-cov"]
+
+[project.urls]
+Repository = "https://github.com/theoddden/entropy-mcp"
+
+[project.scripts]
+entropy-mcp = "entropy_mcp.server:main"
+entropy-mcp-http = "entropy_mcp.http:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["entropy_mcp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

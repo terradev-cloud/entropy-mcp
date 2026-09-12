@@ -1,0 +1,29 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # stamp-mcp is a public sibling repo, not on PyPI -- install from
+      # git first so pip doesn't try to resolve it from the index.
+      - name: Install dependencies
+        run: |
+          pip install "git+https://github.com/theoddden/Stamp-MCP.git"
+          pip install -e ".[dev,http]"
+
+      - name: Run tests
+        run: python -m pytest tests -q --cov=entropy_mcp --cov-report=term-missing

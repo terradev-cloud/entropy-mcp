@@ -1,0 +1,23 @@
+services:
+  entropy:
+    build: .
+    restart: always
+    volumes:
+      - entropy-data:/data
+    expose:
+      - "8001" # reachable only by other services, not the host
+    networks:
+      - default
+      - terradev-cloud_terradev  # lets terradev-web (Caddy) proxy to entropy:8001
+
+# TLS is terminated by the existing terradev-web Caddy container, which
+# already owns ports 80/443. The entropy-mcp.terradev.cloud site block
+# lives in /opt/terradev-cloud/web/Caddyfile on the instance -- the
+# deploy workflow appends deploy/Caddyfile there idempotently.
+
+networks:
+  terradev-cloud_terradev:
+    external: true
+
+volumes:
+  entropy-data:
