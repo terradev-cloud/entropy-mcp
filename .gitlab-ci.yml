@@ -1,4 +1,4 @@
-debug:
-  image: alpine:latest
-  script:
-    - echo "BRANCH=$CI_COMMIT_BRANCH DEFAULT=$CI_DEFAULT_BRANCH SOURCE=$CI_PIPELINE_SOURCE"
+include:
+  - project: 'terradev.cloud/sortie'
+    ref: main
+    file: '/ci/changelog.gitlab-ci.yml'
