@@ -1,19 +1,4 @@
-changelog:
-  stage: .post
+debug:
   image: alpine:latest
-  variables:
-    GIT_DEPTH: "0"
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - apk add --no-cache git git-cliff
-    - git-cliff --output CHANGELOG.md
-    - |
-      if [ -z "$(git status --porcelain CHANGELOG.md)" ]; then
-        echo "CHANGELOG.md unchanged"; exit 0
-      fi
-      git config user.email "ci@terradev.cloud"
-      git config user.name "terradev-ci"
-      git add CHANGELOG.md
-      git commit -m "chore: update CHANGELOG.md [skip ci]"
-      git push "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_COMMIT_BRANCH}"
+    - echo "BRANCH=$CI_COMMIT_BRANCH DEFAULT=$CI_DEFAULT_BRANCH SOURCE=$CI_PIPELINE_SOURCE"
