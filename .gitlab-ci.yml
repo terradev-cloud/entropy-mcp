@@ -1,14 +1,9 @@
-d-always:
-  image: alpine:latest
-  script: echo always
-
-d-post:
+changelog:
   stage: .post
   image: alpine:latest
-  script: echo post
-
-d-rule:
-  image: alpine:latest
+  variables:
+    GIT_DEPTH: "0"
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  script: echo rule
+  script:
+    - echo test
