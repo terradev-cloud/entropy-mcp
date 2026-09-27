@@ -1,0 +1,16 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.terradev-cloud/entropy",
+  "description": "Cryptographically sound randomness for agents with verifiable commit-reveal: CSPRNG draws, seeded determinism, named distributions, constrained sampling, entropy tests, bandit strategies.",
+  "repository": {
+    "url": "https://github.com/terradev-cloud/entropy-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://entropy-mcp.terradev.cloud/mcp"
+    }
+  ]
+}
